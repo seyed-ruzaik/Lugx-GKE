@@ -29,31 +29,31 @@ jobs:
 
       # Step 3: Configure Docker for Artifact Registry
       - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker asia-south1-docker.pkg.dev
+        run: gcloud auth configure-docker gcr.io
 
       # Step 4: Build & push Frontend Docker image
       - name: Build & Push Frontend Image
         run: |
-          docker build -t asia-south1-docker.pkg.dev/lugx-gaming-465010/lugx-repo/lugx-frontend:latest ./
-          docker push asia-south1-docker.pkg.dev/lugx-gaming-465010/lugx-repo/lugx-frontend:latest
+          docker build -t gcr.io/lugx-gaming-465010/lugx-frontend:latest ./
+          docker push gcr.io/lugx-gaming-465010/lugx-frontend:latest
 
       # Step 5: Build & push Game Service Docker image
       - name: Build & Push Game Service Image
         run: |
-          docker build -t asia-south1-docker.pkg.dev/lugx-gaming-465010/lugx-repo/game-service:latest ./lugx-microservices/game-service
-          docker push asia-south1-docker.pkg.dev/lugx-gaming-465010/lugx-repo/game-service:latest
+          docker build -t gcr.io/lugx-gaming-465010/game-service:latest ./lugx-microservices/game-service
+          docker push gcr.io/lugx-gaming-465010/game-service:latest
 
       # Step 6: Build & push Order Service Docker image
       - name: Build & Push Order Service Image
         run: |
-          docker build -t asia-south1-docker.pkg.dev/lugx-gaming-465010/lugx-repo/order-service:latest ./lugx-microservices/order-service
-          docker push asia-south1-docker.pkg.dev/lugx-gaming-465010/lugx-repo/order-service:latest
+          docker build -t gcr.io/lugx-gaming-465010/order-service:latest ./lugx-microservices/order-service
+          docker push gcr.io/lugx-gaming-465010/order-service:latest
 
       # Step 7: Build & push Analytics Service Docker image
       - name: Build & Push Analytics Service Image
         run: |
-          docker build -t asia-south1-docker.pkg.dev/lugx-gaming-465010/lugx-repo/analytics-service:latest ./lugx-microservices/analytics-service
-          docker push asia-south1-docker.pkg.dev/lugx-gaming-465010/lugx-repo/analytics-service:latest
+          docker build -t gcr.io/lugx-gaming-465010/analytics-service:latest ./lugx-microservices/analytics-service
+          docker push gcr.io/lugx-gaming-465010/analytics-service:latest
 
       # Step 8: Install gke-gcloud-auth-plugin for kubectl
       - name: Install gke-gcloud-auth-plugin
