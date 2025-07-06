@@ -1,0 +1,13 @@
+apiVersion: monitoring.googleapis.com/v1
+kind: PodMonitoring
+metadata:
+  name: game-service-monitor
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: game-service
+  endpoints:
+  - port: 5000
+    path: /metrics
+    interval: 30s

@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analytics-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: analytics-service
+  template:
+    metadata:
+      labels:
+        app: analytics-service
+    spec:
+      containers:
+      - name: analytics-container
+        image: gcr.io/lugx-gaming-465010/analytics-service
+        ports:
+        - containerPort: 5002
+        env:
+          - name: CLICKHOUSE_HOST
+            valueFrom:
+              secretKeyRef:
+                name: clickhouse-secret
+                key: CLICKHOUSE_HOST
+          - name: CLICKHOUSE_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: clickhouse-secret
+                key: CLICKHOUSE_USERNAME
+          - name: CLICKHOUSE_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: clickhouse-secret
+                key: CLICKHOUSE_PASSWORD
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: analytics-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: analytics-service
+  ports:
+    - port: 5002
+      targetPort: 5002

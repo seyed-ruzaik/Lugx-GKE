@@ -1,0 +1,13 @@
+apiVersion: monitoring.googleapis.com/v1
+kind: PodMonitoring
+metadata:
+  name: order-service-monitor
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: order-service
+  endpoints:
+  - port: 5001
+    path: /metrics
+    interval: 30s

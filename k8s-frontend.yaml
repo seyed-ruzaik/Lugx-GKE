@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lugx-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lugx-frontend
+  template:
+    metadata:
+      labels:
+        app: lugx-frontend
+    spec:
+      containers:
+      - name: frontend-container
+        image: gcr.io/lugx-gaming-465010/lugx-frontend
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 250m
+            memory: 512Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lugx-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: lugx-frontend
+  ports:
+    - port: 80
+      targetPort: 80

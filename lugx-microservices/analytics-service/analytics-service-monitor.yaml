@@ -1,0 +1,13 @@
+apiVersion: monitoring.googleapis.com/v1
+kind: PodMonitoring
+metadata:
+  name: analytics-service-monitor
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: analytics-service
+  endpoints:
+  - port: 5002
+    path: /metrics
+    interval: 30s

@@ -1,0 +1,5 @@
+flask
+clickhouse-connect
+flask_cors
+python-dotenv
+prometheus_client

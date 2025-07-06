@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: game-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: game-service
+  template:
+    metadata:
+      labels:
+        app: game-service
+    spec:
+      containers:
+      - name: game-container
+        image: gcr.io/lugx-gaming-465010/game-service
+        ports:
+        - containerPort: 5000
+        env:
+          - name: SUPABASE_URL
+            valueFrom:
+              secretKeyRef:
+                name: supabase-secret
+                key: SUPABASE_URL
+          - name: SUPABASE_KEY
+            valueFrom:
+              secretKeyRef:
+                name: supabase-secret
+                key: SUPABASE_KEY
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: game-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: game-service
+  ports:
+    - port: 5000
+      targetPort: 5000

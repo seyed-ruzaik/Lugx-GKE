@@ -1,0 +1,5 @@
+flask
+prometheus_flask_exporter
+supabase==2.15.3
+python-dotenv
+prometheus_client
