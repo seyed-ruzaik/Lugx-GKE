@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: order-container
-        image: gcr.io/lugx-gaming-465010/order-service
+        image: gcr.io/lugx-gaming-465010/order-service:latest
         ports:
         - containerPort: 5001
         env:

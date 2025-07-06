@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: game-container
-        image: gcr.io/lugx-gaming-465010/game-service
+        image: gcr.io/lugx-gaming-465010/game-service:latest
         ports:
         - containerPort: 5000
         env:

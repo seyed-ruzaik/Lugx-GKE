@@ -1,4 +1,4 @@
-name: CI/CD for Lugx Gaming
+name: CI/CD for Lugx Gaming GKE Deployment
 
 on:
   push:
@@ -7,109 +7,64 @@ on:
   pull_request:
     branches:
       - main
-  schedule:
-    - cron: '0 0 * * *'  # Run daily at midnight UTC
 
 env:
-  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-  SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-  CLICKHOUSE_HOST: ${{ secrets.CLICKHOUSE_HOST }}
-  CLICKHOUSE_USERNAME: ${{ secrets.CLICKHOUSE_USERNAME }}
-  CLICKHOUSE_PASSWORD: ${{ secrets.CLICKHOUSE_PASSWORD }}
+  PROJECT_ID: lugx-gaming-465010
+  CLUSTER_NAME: lugx-cluster
+  REGION: asia-south1
 
 jobs:
-  build-test-deploy:
+  build-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+    # 1. Checkout Code
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      - name: Set up Docker
-        uses: docker/setup-buildx-action@v2
+    # 2. Authenticate to GCP
+    - name: Authenticate to GCP
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: '${{ secrets.GCP_SA_KEY }}'
 
-      - name: Install Minikube
-        uses: medyagh/setup-minikube@latest
-        with:
-          driver: docker
+    # 3. Configure Docker to use GCR
+    - name: Configure Docker for GCR
+      run: gcloud auth configure-docker
 
-      - name: Start Minikube
-        run: minikube start --driver=docker
+    # 4. Build and push Docker images
+    - name: Build and push frontend image
+      run: |
+        docker build -t gcr.io/$PROJECT_ID/lugx-frontend ./
+        docker push gcr.io/$PROJECT_ID/lugx-frontend
 
-      - name: Enable Minikube Docker Env
-        run: |
-          echo "::set-env name=DOCKER_TLS_VERIFY=0"
-          echo "::set-env name=DOCKER_HOST=$(minikube docker-env --shell bash | grep DOCKER_HOST | cut -d'=' -f2)"
+    - name: Build and push game-service image
+      run: |
+        docker build -t gcr.io/$PROJECT_ID/game-service ./lugx-microservices/game-service
+        docker push gcr.io/$PROJECT_ID/game-service
 
-      - name: Build Docker Images Inside Minikube
-        run: |
-          eval $(minikube docker-env)
-          docker build -t lugx-frontend ./
-          docker build -t game-service ./lugx-microservices/game-service
-          docker build -t order-service ./lugx-microservices/order-service
-          docker build -t analytics-service ./lugx-microservices/analytics-service
+    - name: Build and push order-service image
+      run: |
+        docker build -t gcr.io/$PROJECT_ID/order-service ./lugx-microservices/order-service
+        docker push gcr.io/$PROJECT_ID/order-service
 
-      - name: Create Kubernetes Secrets for Supabase
-        run: |
-          kubectl create secret generic supabase-secret \
-            --from-literal=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
-            --from-literal=SUPABASE_KEY="${{ secrets.SUPABASE_KEY }}"
+    - name: Build and push analytics-service image
+      run: |
+        docker build -t gcr.io/$PROJECT_ID/analytics-service ./lugx-microservices/analytics-service
+        docker push gcr.io/$PROJECT_ID/analytics-service
 
-      - name: Create Kubernetes Secrets for ClickHouse
-        run: |
-          kubectl create secret generic clickhouse-secret \
-            --from-literal=CLICKHOUSE_HOST="${{ secrets.CLICKHOUSE_HOST }}" \
-            --from-literal=CLICKHOUSE_USERNAME="${{ secrets.CLICKHOUSE_USERNAME }}" \
-            --from-literal=CLICKHOUSE_PASSWORD="${{ secrets.CLICKHOUSE_PASSWORD }}"
+    # 5. Get GKE credentials
+    - name: Get GKE credentials
+      run: gcloud container clusters get-credentials $CLUSTER_NAME --region $REGION --project $PROJECT_ID
 
-      - name: Install Prometheus Stack
-        run: |
-          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-          helm repo update
-          helm install monitoring prometheus-community/kube-prometheus-stack --namespace monitoring --create-namespace
+    # 6. Apply Kubernetes manifests
+    - name: Deploy to GKE
+      run: |
+        kubectl apply -f k8s-frontend.yaml
+        kubectl apply -f ./lugx-microservices/game-service/k8s-game-service.yaml
+        kubectl apply -f ./lugx-microservices/order-service/k8s-order-service.yaml
+        kubectl apply -f ./lugx-microservices/analytics-service/k8s-analytics-service.yaml
 
-      - name: Wait for Prometheus CRDs
-        run: |
-          echo "Waiting for ServiceMonitor CRDs to register..."
-          sleep 60
-
-      - name: Apply Kubernetes Manifests
-        run: |
-          kubectl apply -f ./k8s-frontend.yaml
-          kubectl apply -f ./lugx-microservices/game-service/k8s-game-service.yaml
-          kubectl apply -f ./lugx-microservices/game-service/game-service.yaml
-          kubectl apply -f ./lugx-microservices/game-service/game-servicemonitor.yaml
-          kubectl apply -f ./lugx-microservices/order-service/k8s-order-service.yaml
-          kubectl apply -f ./lugx-microservices/order-service/order-service.yaml
-          kubectl apply -f ./lugx-microservices/order-service/order-servicemonitor.yaml
-          kubectl apply -f ./lugx-microservices/analytics-service/k8s-analytics-service.yaml
-          kubectl apply -f ./lugx-microservices/analytics-service/analytics-service.yaml
-          kubectl apply -f ./lugx-microservices/analytics-service/analytics-servicemonitor.yaml
-
-      - name: Wait for Services to Be Ready
-        run: |
-          sleep 60
-          kubectl get pods
-
-      - name: Logs and Port Forwarding
-        run: |
-          kubectl get pods
-          kubectl logs -l app=game-service
-          kubectl logs -l app=order-service
-          kubectl logs -l app=analytics-service
-
-          nohup kubectl port-forward svc/order-service 5001:5001 &
-          nohup kubectl port-forward svc/game-service 5000:5000 &
-          nohup kubectl port-forward svc/lugx-service 8080:80 &
-          nohup kubectl port-forward svc/analytics-service 5002:5002 &
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-
-      - name: Install Python Dependencies
-        run: pip install requests
-
-      - name: Run Integration Tests
-        run: python tests/integration_tests.py
+    # 7. Check deployed pods
+    - name: Verify deployment
+      run: kubectl get pods

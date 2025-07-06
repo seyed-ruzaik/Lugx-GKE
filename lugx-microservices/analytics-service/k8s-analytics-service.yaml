@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: analytics-container
-        image: gcr.io/lugx-gaming-465010/analytics-service
+        image: gcr.io/lugx-gaming-465010/analytics-service:latest
         ports:
         - containerPort: 5002
         env:

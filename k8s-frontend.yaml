@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: frontend-container
-        image: gcr.io/lugx-gaming-465010/lugx-frontend
+        image: gcr.io/lugx-gaming-465010/lugx-frontend:latest
         ports:
         - containerPort: 80
         resources:
