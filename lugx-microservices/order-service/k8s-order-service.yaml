@@ -17,18 +17,16 @@ spec:
         image: gcr.io/lugx-gaming-465010/order-service:latest
         ports:
         - containerPort: 5001
-        env:
-          - name: SUPABASE_URL
-            valueFrom:
-              secretKeyRef:
-                name: supabase-secret
-                key: SUPABASE_URL
-          - name: SUPABASE_KEY
-            valueFrom:
-              secretKeyRef:
-                name: supabase-secret
-                key: SUPABASE_KEY
-
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+        envFrom:
+        - secretRef:
+            name: supabase-secret
 ---
 apiVersion: v1
 kind: Service
@@ -39,5 +37,5 @@ spec:
   selector:
     app: order-service
   ports:
-    - port: 5001
-      targetPort: 5001
+  - port: 5001
+    targetPort: 5001
