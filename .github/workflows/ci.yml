@@ -57,23 +57,23 @@ jobs:
 
       - name: Deploy frontend
         run: |
-          kubectl apply -f lugx-microservices/game-service/k8s-game-service.yaml
-          kubectl set image deployment/game-service game-container=gcr.io/lugx-gaming-465010/game-service:latest --record
+          kubectl apply -f k8s-frontend.yaml
+          kubectl rollout restart deployment lugx-frontend
 
       - name: Deploy game service
         run: |
           kubectl apply -f lugx-microservices/game-service/k8s-game-service.yaml
-          kubectl set image deployment/game-service game-container=gcr.io/lugx-gaming-465010/game-service:latest --record
+          kubectl rollout restart deployment game-service
 
       - name: Deploy order service
         run: |
           kubectl apply -f lugx-microservices/order-service/k8s-order-service.yaml
-          kubectl set image deployment/order-service order-container=gcr.io/lugx-gaming-465010/order-service:latest --record
+          kubectl rollout restart deployment order-service
 
       - name: Deploy analytics service
         run: |
           kubectl apply -f lugx-microservices/analytics-service/k8s-analytics-service.yaml
-          kubectl set image deployment/analytics-service analytics-container=gcr.io/lugx-gaming-465010/analytics-service:latest --record
+          kubectl rollout restart deployment analytics-service
 
       - name: Apply ServiceMonitors
         run: |
