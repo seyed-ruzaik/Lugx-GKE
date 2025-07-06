@@ -2,82 +2,118 @@ name: CI/CD for Lugx Gaming
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
-    branches: [main]
+    branches:
+      - main
   schedule:
-    - cron: '0 0 * * *'
-
-permissions:
-  contents: read
-  id-token: write
+    - cron: '0 0 * * *'  # Runs daily at midnight UTC
 
 jobs:
   build-test-deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v3
+      # Step 1: Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      - id: 'auth'
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: '${{ secrets.GCP_SA_KEY }}'
-
-      - name: Set up gcloud
-        uses: google-github-actions/setup-gcloud@v2
+      # Step 2: Set up Google Cloud SDK with authentication
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
         with:
           project_id: lugx-gaming-465010
-          install_components: gke-gcloud-auth-plugin
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          export_default_credentials: true
 
-      - name: Configure Docker auth
+      # Step 3: Configure Docker for Artifact Registry
+      - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker gcr.io
 
-      - name: Build & Push Frontend
+      # Step 4: Build & push Frontend Docker image
+      - name: Build & Push Frontend Image
         run: |
           docker build -t gcr.io/lugx-gaming-465010/lugx-frontend:latest ./
           docker push gcr.io/lugx-gaming-465010/lugx-frontend:latest
 
-      - name: Build & Push Game Service
+      # Step 5: Build & push Game Service Docker image
+      - name: Build & Push Game Service Image
         run: |
           docker build -t gcr.io/lugx-gaming-465010/game-service:latest ./lugx-microservices/game-service
           docker push gcr.io/lugx-gaming-465010/game-service:latest
 
-      - name: Build & Push Order Service
+      # Step 6: Build & push Order Service Docker image
+      - name: Build & Push Order Service Image
         run: |
           docker build -t gcr.io/lugx-gaming-465010/order-service:latest ./lugx-microservices/order-service
           docker push gcr.io/lugx-gaming-465010/order-service:latest
 
-      - name: Build & Push Analytics Service
+      # Step 7: Build & push Analytics Service Docker image
+      - name: Build & Push Analytics Service Image
         run: |
           docker build -t gcr.io/lugx-gaming-465010/analytics-service:latest ./lugx-microservices/analytics-service
           docker push gcr.io/lugx-gaming-465010/analytics-service:latest
 
+      # Step 8: Install gke-gcloud-auth-plugin for kubectl
+      - name: Install gke-gcloud-auth-plugin
+        run: sudo apt-get install -y google-cloud-sdk-gke-gcloud-auth-plugin
+
+      # Step 9: Get GKE cluster credentials
       - name: Get GKE credentials
-        run: gcloud container clusters get-credentials lugx-cluster --region asia-south1
-
-      - name: Deploy frontend
-        run: kubectl apply -f k8s-frontend.yaml
-
-      - name: Deploy game service
-        run: kubectl apply -f lugx-microservices/game-service/k8s-game-service.yaml
-
-      - name: Deploy order service
-        run: kubectl apply -f lugx-microservices/order-service/k8s-order-service.yaml
-
-      - name: Deploy analytics service
-        run: kubectl apply -f lugx-microservices/analytics-service/k8s-analytics-service.yaml
-
-      - name: Apply ServiceMonitors
         run: |
-          kubectl apply -f lugx-microservices/game-service/game-service-monitor.yaml
-          kubectl apply -f lugx-microservices/order-service/order-service-monitor.yaml
-          kubectl apply -f lugx-microservices/analytics-service/analytics-service-monitor.yaml
+          gcloud container clusters get-credentials lugx-cluster --region asia-south1 --project lugx-gaming-465010
 
-      - run: sleep 60
+      # Step 10: Update images in deployments
+      - name: Update Frontend Image in Kubernetes
+        run: |
+          kubectl set image deployment/lugx-frontend frontend-container=gcr.io/lugx-gaming-465010/lugx-frontend:latest --record
 
-      - uses: actions/setup-python@v4
+      - name: Update Game Service Image in Kubernetes
+        run: |
+          kubectl set image deployment/game-service game-container=gcr.io/lugx-gaming-465010/game-service:latest --record
+
+      - name: Update Order Service Image in Kubernetes
+        run: |
+          kubectl set image deployment/order-service order-container=gcr.io/lugx-gaming-465010/order-service:latest --record
+
+      - name: Update Analytics Service Image in Kubernetes
+        run: |
+          kubectl set image deployment/analytics-service analytics-container=gcr.io/lugx-gaming-465010/analytics-service:latest --record
+
+      # Step 11: Wait for rollouts to complete
+      - name: Wait for Frontend Rollout
+        run: kubectl rollout status deployment/lugx-frontend
+
+      - name: Wait for Game Service Rollout
+        run: kubectl rollout status deployment/game-service
+
+      - name: Wait for Order Service Rollout
+        run: kubectl rollout status deployment/order-service
+
+      - name: Wait for Analytics Service Rollout
+        run: kubectl rollout status deployment/analytics-service
+
+      # Step 12: Apply ServiceMonitor YAMLs for observability
+      - name: Apply Game ServiceMonitor
+        run: kubectl apply -f ./lugx-microservices/game-service/game-service-monitor.yaml
+
+      - name: Apply Order ServiceMonitor
+        run: kubectl apply -f ./lugx-microservices/order-service/order-service-monitor.yaml
+
+      - name: Apply Analytics ServiceMonitor
+        run: kubectl apply -f ./lugx-microservices/analytics-service/analytics-service-monitor.yaml
+
+      # Step 13: Set up Python for integration tests
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      - run: pip install requests
-      - run: python tests/integration_tests.py
+      # Step 14: Install Python dependencies
+      - name: Install Python dependencies
+        run: pip install requests
+
+      # Step 15: Run Integration Tests
+      - name: Run Integration Tests
+        run: python tests/integration_tests.py
