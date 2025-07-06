@@ -1,240 +1,177 @@
 # Lugx Gaming Microservices Deployment Runbook
 
-This project contains a set of containerized microservices for a fictional gaming platform: `frontend`, `game-service`, `order-service`, and `analytics-service`. These services are built with Flask and deployed on a Kubernetes cluster using Minikube. The pipeline is automated using GitHub Actions and includes monitoring with Prometheus and Grafana.
+This project contains containerised microservices for a fictional gaming platform: `frontend`, `game-service`, `order-service`, and `analytics-service`. These services are built with Flask and deployed on **Google Kubernetes Engine (GKE)**. The pipeline is automated via **GitHub Actions**, and observability is set up with **Google Cloud Monitoring dashboards**.
 
 ---
 
 ## Prerequisites
 
-Before starting, ensure the following are installed and set up on your machine:
+| Tool | Purpose |
+| ---- | ------- |
+| Google Cloud Platform (GCP) | Hosting Kubernetes cluster and Artifact Registry |
+| Docker | Building container images locally |
+| Kubectl | Kubernetes CLI tool |
+| Python 3 | Running test scripts |
+| GitHub Actions | CI/CD automation |
 
-| Tool           | Purpose                                |
-| -------------- | -------------------------------------- |
-| Docker Desktop | Build and run container images locally |
-| Minikube       | Local Kubernetes cluster               |
-| Kubectl        | Kubernetes command-line tool           |
-| Python 3       | Running services and test scripts      |
-| Helm           | For installing Prometheus & Grafana    |
-| AWS QuickSight | Data visualization for analytics       |
-| ClickHouse     | Storing analytics data                 |
-| GitHub Actions | CI/CD automation                       |
-
-
-> Ensure Docker and Minikube are correctly configured on your system.
+Ensure you have a **GCP Project with billing enabled** and **service account JSON key** set as `GCP_SA_KEY` secret in GitHub Actions.
 
 ---
 
-##  Setup Steps
+## Setup Steps
 
 ### 1. Clone the Repository
 
 ```bash
-https://github.com/seyed-ruzaik/lugx-gaming.git
-```
-
-### 2. Start Minikube (Docker driver)
-
-####  On Windows (PowerShell)
-```bash
-minikube start --driver=docker
-```
-
-####  On macOS/Linux
-```bash
-minikube start --driver=docker
+git clone https://github.com/seyed-ruzaik/Lugx-GKE
 ```
 
 ---
 
-### 3. Create Secrets for Supabase and ClickHouse
+### 2. Authenticate kubectl with cluster
 
-#### On macOS/Linux:
+Ensure your `kubectl` context points to your cluster:
+
 ```bash
-kubectl create secret generic supabase-secret \
-  --from-literal=SUPABASE_URL=https://your-project.supabase.co \
-  --from-literal=SUPABASE_KEY=your-secret-key
+gcloud container clusters get-credentials lugx-cluster --region asia-south1 --project lugx-gaming-465010
+```
+Verify
 
-kubectl create secret generic clickhouse-secret \
-  --from-literal=CLICKHOUSE_HOST=your-host \
-  --from-literal=CLICKHOUSE_USERNAME=your-username \
-  --from-literal=CLICKHOUSE_PASSWORD=your-password
+```bash
+kubectl get nodes
+
 ```
 
-#### On Windows (PowerShell):
-```powershell
-kubectl create secret generic supabase-secret `
-  --from-literal=SUPABASE_URL=https://your-project.supabase.co `
-  --from-literal=SUPABASE_KEY=your-secret-key
+### 3. Build Docker images with GCR tags
 
-kubectl create secret generic clickhouse-secret `
-  --from-literal=CLICKHOUSE_HOST=your-host `
-  --from-literal=CLICKHOUSE_USERNAME=your-username `
-  --from-literal=CLICKHOUSE_PASSWORD=your-password
+```bash
+docker build -t gcr.io/lugx-gaming-465010/lugx-frontend ./ 
+docker build -t gcr.io/lugx-gaming-465010/game-service ./lugx-microservices/game-service
+docker build -t gcr.io/lugx-gaming-465010/order-service ./lugx-microservices/order-service
+docker build -t gcr.io/lugx-gaming-465010/analytics-service ./lugx-microservices/analytics-service
 ```
 
 ---
 
-### 4. Build Docker Images inside Minikube
+### 4. Push images to Google Container Registry
+
+*(Handled automatically by CI/CD, but can be done locally for testing)*
+
+First, authenticate Docker to GCR:
 
 ```bash
-Mac: eval $(minikube docker-env)
-Windows: & minikube -p minikube docker-env | Invoke-Expression
-
-docker build -t lugx-frontend ./
-docker build -t game-service ./lugx-microservices/game-service
-docker build -t order-service ./lugx-microservices/order-service
-docker build -t analytics-service ./lugx-microservices/analytics-service
+gcloud auth configure-docker gcr.io
+```
+Then push:
+```bash
+docker push gcr.io/lugx-gaming-465010/lugx-frontend
+docker push gcr.io/lugx-gaming-465010/game-service
+docker push gcr.io/lugx-gaming-465010/order-service
+docker push gcr.io/lugx-gaming-465010/analytics-service
 ```
 
 ---
 
-### 5. Deploy to Kubernetes Cluster (Including Monitoring Setup)
+### 5. Set up Secrets (ClickHouse and Supabase) and Apply deployments to GKE
 
-Apply the following for each service:
-
-#### Game Service:
 ```bash
+kubectl create secret generic clickhouse-secret --from-literal=CLICKHOUSE_HOST=your-host   --from-literal=CLICKHOUSE_USERNAME=your-username   --from-literal=CLICKHOUSE_PASSWORD=your-password
+```
+
+```bash
+kubectl create secret generic supabase-secret --from-literal=SUPABASE_URL=your-host --from-literal=SUPABASE_KEY=your-key
+```
+
+
+Apply Kubernetes manifests:
+
+```bash
+kubectl apply -f k8s-frontend.yaml
 kubectl apply -f ./lugx-microservices/game-service/k8s-game-service.yaml
-kubectl apply -f ./lugx-microservices/game-service/game-service.yaml
-kubectl apply -f ./lugx-microservices/game-service/game-servicemonitor.yaml
-```
-
-#### Order Service:
-```bash
 kubectl apply -f ./lugx-microservices/order-service/k8s-order-service.yaml
-kubectl apply -f ./lugx-microservices/order-service/order-service.yaml
-kubectl apply -f ./lugx-microservices/order-service/order-servicemonitor.yaml
-```
-
-#### Analytics Service:
-```bash
 kubectl apply -f ./lugx-microservices/analytics-service/k8s-analytics-service.yaml
-kubectl apply -f ./lugx-microservices/analytics-service/analytics-service.yaml
-kubectl apply -f ./lugx-microservices/analytics-service/analytics-servicemonitor.yaml
 ```
 
->  All `ServiceMonitor` YAMLs are required for Prometheus to scrape `/metrics` from services.
 
 ---
 
-
-### 6. Port Forward Services for Local Access
-
-Open separate terminals for each:
-
+Apply ServiceMonitors
 ```bash
-kubectl port-forward svc/lugx-service 8080:80
-kubectl port-forward svc/order-service 5001:5001
-kubectl port-forward svc/game-service 5000:5000
-kubectl port-forward svc/analytics-service 5002:5002
+kubectl apply -f lugx-microservices/game-service/game-service-monitor.yaml
+kubectl apply -f lugx-microservices/order-service/order-service-monitor.yaml
+kubectl apply -f lugx-microservices/analytics-service/analytics-service-monitor.yaml
 ```
 
 ---
 
-### 7. Run Integration Tests (Locally)
-Run integration tests:
+### 6. Observability
+
+Monitoring is integrated using **Google Cloud Monitoring dashboards**:
+
+- Pod CPU & Memory usage
+- Pod restarts
+- Uptime status
+- (Optional) Network I/O metrics
+
+---
+
+### 7. CI/CD Pipeline
+
+GitHub Actions pipeline (`.github/workflows/ci.yml`) is configured to:
+
+1. **Build** Docker images
+2. **Push** to Artifact Registry
+3. **Deploy** updated manifests to GKE
+4. **Run integration tests** against deployed services
+
+Triggers on every push, PR, and nightly schedule.
+
+---
+
+### 8. Integration Tests
+
+Run locally:
 
 ```bash
 python tests/integration_tests.py
 ```
 
-Or test manually in browser/Postman:
-
-- `GET http://localhost:5000/games`
-- `POST http://localhost:5000/add-game` (with JSON payload)
-- `GET http://localhost:5001/orders`
-- `POST http://localhost:5001/place-order` (with JSON payload)
-- `POST http://localhost:5002/track` (with JSON payload)
+Or automatically via GitHub Actions.
 
 ---
 
-
-### 8. Set Up Monitoring Stack
+### 9. Cleaning Up
 
 ```bash
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update
-helm install monitoring prometheus-community/kube-prometheus-stack --namespace monitoring --create-namespace
+gcloud container clusters delete lugx-cluster --region asia-south1
+```
+
+*(This will delete your GKE cluster to avoid billing charges.)*
+
+---
+
+## Notes
+
+- **Load Balancer IPs** can be found via:
+
+```bash
+kubectl get services
+```
+
+- Ensure all pods are in `Running` state to validate successful deployment:
+
+```bash
+kubectl get pods
 ```
 
 ---
 
-### 9. Port-Forward Grafana UI
+### 10. Updating a Microservice
 
-```bash
-kubectl port-forward -n monitoring svc/monitoring-grafana 3000:80
-```
-Visit [http://localhost:3000](http://localhost:3000) (default login: admin/admin)
-
-> Create dashboards using the metrics: `order_requests_total`, `get_orders_total`, `track_requests_total`, etc.
+1. Make code changes (e.g., `app.py`).
+2. Commit and push to `main`.
+3. CI/CD pipeline redeploys automatically.
 
 ---
 
-### 10. Visualize Analytics in AWS QuickSight
-
-Since QuickSight doesn’t support ClickHouse directly:
-
-1. ClickHouse is deployed and stores tracked events (`web_analytics` table).
-2. We connect via MySQL-compatible port.
-3. In QuickSight, create a new **MySQL connection** using:
-   - Host: Your Host
-   - Port: 3306 (ClickHouse MySQL port)
-   - User: `default`
-   - Password: `mypassword`
-4. Build interactive dashboards on the table.
-
----
-### 11. CI/CD Pipeline (GitHub Actions)
-
-Every commit or push triggers:
-
-- Docker builds for all services
-- Deploys to Kubernetes (Rolling strategy used)
-- Runs integration tests automatically
-
-\*Script is located at: \**`.github/workflows/ci.yml`*
-
----
-
-### 12. Updating a Microservice
-
-If you change `app.py`, follow:
-
-```bash
-Windows: & minikube -p minikube docker-env | Invoke-Expression
-Mac: eval $(minikube docker-env)
-
-docker build -t lugx-frontend ./
-docker build -t game-service ./lugx-microservices/game-service
-docker build -t order-service ./lugx-microservices/order-service
-docker build -t analytics-service ./lugx-microservices/analytics-service
-
-kubectl rollout restart deployment game-service
-kubectl rollout restart deployment order-service
-kubectl rollout restart deployment analytics-service
-kubectl rollout restart deployment lugx-frontend
- 
-kubectl delete pod -l app=game-service
-kubectl delete pod -l app=order-service
-kubectl delete pod -l app=analytics-service
-kubectl delete pod -l app=lugx-frontend
-
-```
-
----
-
-### 13. Shutting Down and Cleanup
-
-```bash
-kubectl delete -f ./lugx-microservices/analytics-service/k8s-clickhouse.yaml
-kubectl delete -f ./lugx-microservices/order-service/k8s-order-service.yaml
-kubectl delete -f ./lugx-microservices/game-service/k8s-game-service.yaml
-kubectl delete -f ./lugx-microservices/analytics-service/k8s-analytics-service.yaml
-kubectl delete -f ./k8s-frontend.yaml
-minikube stop
-```
-
----
-
-  **End of Runbook**
-
+**End of Runbook**
