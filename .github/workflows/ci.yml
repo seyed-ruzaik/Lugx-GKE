@@ -64,37 +64,43 @@ jobs:
         run: |
           gcloud container clusters get-credentials lugx-cluster --region asia-south1 --project lugx-gaming-465010
 
-      # Step 10: Update images in deployments
+      # Step 10: Deploy Frontend to GKE
+      - name: Deploy Frontend to GKE
+        run: kubectl apply -f k8s-frontend.yaml
+
+      # Step 10.1: Update Frontend image to trigger rollout
       - name: Update Frontend Image in Kubernetes
         run: |
           kubectl set image deployment/lugx-frontend frontend-container=gcr.io/lugx-gaming-465010/lugx-frontend:latest --record
 
+      # Step 11: Deploy Game Service to GKE
+      - name: Deploy Game Service to GKE
+        run: kubectl apply -f ./lugx-microservices/game-service/k8s-game-service.yaml
+
+      # Step 11.1: Update Game Service image to trigger rollout
       - name: Update Game Service Image in Kubernetes
         run: |
           kubectl set image deployment/game-service game-container=gcr.io/lugx-gaming-465010/game-service:latest --record
 
+      # Step 12: Deploy Order Service to GKE
+      - name: Deploy Order Service to GKE
+        run: kubectl apply -f ./lugx-microservices/order-service/k8s-order-service.yaml
+
+      # Step 12.1: Update Order Service image to trigger rollout
       - name: Update Order Service Image in Kubernetes
         run: |
           kubectl set image deployment/order-service order-container=gcr.io/lugx-gaming-465010/order-service:latest --record
 
+      # Step 13: Deploy Analytics Service to GKE
+      - name: Deploy Analytics Service to GKE
+        run: kubectl apply -f ./lugx-microservices/analytics-service/k8s-analytics-service.yaml
+
+      # Step 13.1: Update Analytics Service image to trigger rollout
       - name: Update Analytics Service Image in Kubernetes
         run: |
           kubectl set image deployment/analytics-service analytics-container=gcr.io/lugx-gaming-465010/analytics-service:latest --record
 
-      # Step 11: Wait for rollouts to complete
-      - name: Wait for Frontend Rollout
-        run: kubectl rollout status deployment/lugx-frontend
-
-      - name: Wait for Game Service Rollout
-        run: kubectl rollout status deployment/game-service
-
-      - name: Wait for Order Service Rollout
-        run: kubectl rollout status deployment/order-service
-
-      - name: Wait for Analytics Service Rollout
-        run: kubectl rollout status deployment/analytics-service
-
-      # Step 12: Apply ServiceMonitor YAMLs for observability
+      # Step 14: Apply ServiceMonitor YAMLs for observability
       - name: Apply Game ServiceMonitor
         run: kubectl apply -f ./lugx-microservices/game-service/game-service-monitor.yaml
 
@@ -104,16 +110,20 @@ jobs:
       - name: Apply Analytics ServiceMonitor
         run: kubectl apply -f ./lugx-microservices/analytics-service/analytics-service-monitor.yaml
 
-      # Step 13: Set up Python for integration tests
+      # Step 15: Wait for services to stabilise
+      - name: Wait for services to be ready
+        run: sleep 60
+
+      # Step 16: Set up Python for integration tests
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      # Step 14: Install Python dependencies
+      # Step 17: Install Python dependencies
       - name: Install Python dependencies
         run: pip install requests
 
-      # Step 15: Run Integration Tests
+      # Step 18: Run Integration Tests
       - name: Run Integration Tests
         run: python tests/integration_tests.py
