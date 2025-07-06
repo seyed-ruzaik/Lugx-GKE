@@ -12,6 +12,8 @@ This project contains containerised microservices for a fictional gaming platfor
 | Docker | Building container images locally |
 | Kubectl | Kubernetes CLI tool |
 | Python 3 | Running test scripts |
+| AWS QuickSight | Data visualization for analytics       |
+| ClickHouse     | Storing analytics data                 |
 | GitHub Actions | CI/CD automation |
 
 Ensure you have a **GCP Project with billing enabled** and **service account JSON key** set as `GCP_SA_KEY` secret in GitHub Actions.
@@ -74,12 +76,33 @@ docker push gcr.io/lugx-gaming-465010/analytics-service
 
 ### 5. Set up Secrets (ClickHouse and Supabase) and Apply deployments to GKE
 
-```bash
-kubectl create secret generic clickhouse-secret --from-literal=CLICKHOUSE_HOST=your-host   --from-literal=CLICKHOUSE_USERNAME=your-username   --from-literal=CLICKHOUSE_PASSWORD=your-password
-```
+On macOS/Linux:
 
 ```bash
-kubectl create secret generic supabase-secret --from-literal=SUPABASE_URL=your-host --from-literal=SUPABASE_KEY=your-key
+kubectl create secret generic supabase-secret \
+  --from-literal=SUPABASE_URL=https://your-project.supabase.co \
+  --from-literal=SUPABASE_KEY=your-secret-key
+
+kubectl create secret generic clickhouse-secret \
+  --from-literal=CLICKHOUSE_HOST=your-host \
+  --from-literal=CLICKHOUSE_USERNAME=your-username \
+  --from-literal=CLICKHOUSE_PASSWORD=your-password
+
+```
+
+On Windows (PowerShell):
+
+
+```bash
+kubectl create secret generic supabase-secret `
+  --from-literal=SUPABASE_URL=https://your-project.supabase.co `
+  --from-literal=SUPABASE_KEY=your-secret-key
+
+kubectl create secret generic clickhouse-secret `
+  --from-literal=CLICKHOUSE_HOST=your-host `
+  --from-literal=CLICKHOUSE_USERNAME=your-username `
+  --from-literal=CLICKHOUSE_PASSWORD=your-password
+
 ```
 
 
@@ -140,7 +163,22 @@ Or automatically via GitHub Actions.
 
 ---
 
-### 9. Cleaning Up
+### 9. Visualize Analytics in AWS QuickSight
+
+Since QuickSight doesn’t support ClickHouse directly:
+
+1. ClickHouse is deployed and stores tracked events (`web_analytics` table).
+2. We connect via MySQL-compatible port.
+3. In QuickSight, create a new **MySQL connection** using:
+   - Host: Your Host
+   - Port: 3306 (ClickHouse MySQL port)
+   - User: `default`
+   - Password: `mypassword`
+4. Build interactive dashboards on the table.
+
+---
+
+### 10. Cleaning Up
 
 ```bash
 gcloud container clusters delete lugx-cluster --region asia-south1
@@ -166,7 +204,7 @@ kubectl get pods
 
 ---
 
-### 10. Updating a Microservice
+### 11. Updating a Microservice
 
 1. Make code changes (e.g., `app.py`).
 2. Commit and push to `main`.
